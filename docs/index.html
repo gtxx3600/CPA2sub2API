@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>CPA to sub2api</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero-grid">
+        <section class="panel hero-card">
+          <p class="eyebrow">Browser-Only Workspace</p>
+          <h1>
+            <span class="hero-line">批量转换</span>
+            <span class="hero-line">CPA 认证文件，</span>
+            <span class="hero-line">不离开浏览器</span>
+          </h1>
+          <p class="hero-copy">
+            将 CPA（CLIProxyApi）的认证 JSON 转成 sub2api 导入格式。
+            当前支持 Codex、Claude、Antigravity、Gemini，
+            整个过程只在当前浏览器本地完成，不发请求，不上传任何 token。
+          </p>
+          <div class="hero-tags">
+            <span>纯前端</span>
+            <span>本地解析</span>
+            <span>批量导出</span>
+          </div>
+          <div class="support-strip" aria-label="支持来源">
+            <span class="support-label">支持来源</span>
+            <span class="support-item">Codex</span>
+            <span class="support-item">Claude</span>
+            <span class="support-item">Antigravity</span>
+            <span class="support-item">Gemini</span>
+          </div>
+        </section>
+
+        <section class="panel import-card">
+          <div class="import-layout">
+            <div class="import-copy-block">
+              <div class="section-head import-head">
+                <div>
+                  <h2>导入文件</h2>
+                  <p>支持多文件拖拽，也支持目录导入。</p>
+                </div>
+              </div>
+
+              <div class="source-list" aria-label="可导入类型">
+                <span class="source-pill">`type: codex`</span>
+                <span class="source-pill">`type: claude`</span>
+                <span class="source-pill">`type: antigravity`</span>
+                <span class="source-pill">`type: gemini`</span>
+              </div>
+
+              <p class="import-copy">
+                文件只在当前浏览器本地解析，不上传，不请求接口。
+              </p>
+            </div>
+
+            <div class="dropzone" id="dropzone" tabindex="0" role="button">
+              <p class="dropzone-title">拖拽 `*.json` 到这里</p>
+              <p class="dropzone-copy">
+                页面不会上传任何认证数据，所有内容都只在当前浏览器中解析。
+              </p>
+              <div class="dropzone-actions">
+                <button class="button button-primary" id="pick-files" type="button">
+                  选择文件
+                </button>
+                <button class="button button-secondary" id="pick-folder" type="button">
+                  选择目录
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="stats-column">
+          <section class="panel stat-card">
+            <div class="stat-value" id="stat-success">0</div>
+            <div class="stat-label">成功转换</div>
+          </section>
+          <section class="panel stat-card">
+            <div class="stat-value" id="stat-skipped">0</div>
+            <div class="stat-label">跳过文件</div>
+          </section>
+          <section class="panel stat-card provider-card">
+            <div class="stat-value" id="stat-type">4种</div>
+            <div class="stat-label">支持来源</div>
+            <div class="provider-grid" aria-label="支持来源图标">
+              <div class="provider-entry">
+                <img src="./assets/providers/codex.svg" alt="Codex 图标" class="provider-icon" />
+                <span>Codex</span>
+              </div>
+              <div class="provider-entry">
+                <img src="./assets/providers/claude.svg" alt="Claude 图标" class="provider-icon" />
+                <span>Claude</span>
+              </div>
+              <div class="provider-entry">
+                <img src="./assets/providers/antigravity.svg" alt="Antigravity 图标" class="provider-icon" />
+                <span>Antigravity</span>
+              </div>
+              <div class="provider-entry">
+                <img src="./assets/providers/gemini.svg" alt="Gemini 图标" class="provider-icon" />
+                <span>Gemini</span>
+              </div>
+            </div>
+          </section>
+        </aside>
+      </header>
+
+      <main class="workspace-grid">
+        <section class="panel results-card">
+          <div class="section-head results-head">
+            <div>
+              <h2>转换结果</h2>
+              <p id="summary-text">还没有导入文件。</p>
+            </div>
+            <div class="results-actions">
+              <button class="button button-ghost" id="clear-results" type="button">
+                清空
+              </button>
+              <button class="button button-secondary" id="download-individual" type="button" disabled>
+                导出单文件
+              </button>
+              <button class="button button-primary" id="download-merged" type="button" disabled>
+                下载合并 JSON
+              </button>
+            </div>
+          </div>
+
+          <div class="results-grid">
+            <section class="result-panel">
+              <div class="result-panel-head">
+                <h3>有效文件</h3>
+                <span id="converted-hint">等待导入</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <colgroup>
+                    <col class="col-file" />
+                    <col class="col-source" />
+                    <col class="col-email" />
+                    <col class="col-expiry" />
+                    <col class="col-action" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>文件</th>
+                      <th>来源</th>
+                      <th>邮箱</th>
+                      <th>过期时间</th>
+                      <th>导出</th>
+                    </tr>
+                  </thead>
+                  <tbody id="converted-body">
+                    <tr class="empty-row">
+                      <td colspan="5">导入后会在这里列出可导出的 sub2api 文件。</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="result-panel issues-panel">
+              <div class="result-panel-head">
+                <h3>跳过 / 错误</h3>
+                <span id="skipped-hint"></span>
+              </div>
+              <ul class="issues-list" id="issues-list">
+                <li class="issue-empty">暂无问题</li>
+              </ul>
+            </section>
+          </div>
+
+        </section>
+      </main>
+    </div>
+
+    <input
+      id="file-input"
+      type="file"
+      accept=".json,application/json"
+      multiple
+      hidden
+    />
+    <input
+      id="folder-input"
+      type="file"
+      accept=".json,application/json"
+      webkitdirectory
+      multiple
+      hidden
+    />
+
+    <script type="module" src="./src/app.mjs"></script>
+  </body>
+</html>
