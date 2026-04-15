@@ -6,6 +6,10 @@
 
 ![CPA to sub2api 界面预览](./screenshot.png)
 
+## 在线使用
+
+### [**》》 点我直接使用 《《**](https://gtxx3600.github.io/CPA2sub2API/)
+
 ## 特性
 
 - 浏览器本地完成解析和转换，不调用任何接口
@@ -42,4 +46,3 @@ python3 -m http.server 8000
 ```
 
 然后访问 `http://localhost:8000`
-
