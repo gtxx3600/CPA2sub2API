@@ -78,8 +78,42 @@ function normalizeTimestamp(value) {
   return date.toISOString();
 }
 
+function toFiniteNumber(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim() !== "") {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+
+  return undefined;
+}
+
+function timestampFromUnixLike(value) {
+  const numeric = toFiniteNumber(value);
+  if (numeric === undefined) {
+    return undefined;
+  }
+
+  const milliseconds = numeric > 1e11 ? numeric : numeric * 1000;
+  const date = new Date(milliseconds);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date.toISOString();
+}
+
+function normalizeFlexibleTimestamp(value) {
+  return firstNonEmpty(normalizeTimestamp(value), timestampFromUnixLike(value));
+}
+
 function normalizeUnixSecondsString(value) {
-  const normalized = normalizeTimestamp(value);
+  const normalized = normalizeFlexibleTimestamp(value);
   if (!normalized) {
     return undefined;
   }
@@ -93,6 +127,21 @@ function timestampFromUnixSeconds(value) {
   }
 
   return new Date(value * 1000).toISOString();
+}
+
+function timestampFromNowPlusSeconds(value, now) {
+  const seconds = toFiniteNumber(value);
+  if (seconds === undefined) {
+    return undefined;
+  }
+
+  const base = now instanceof Date ? now : new Date();
+  const date = new Date(base.getTime() + (seconds * 1000));
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+
+  return date.toISOString();
 }
 
 function deriveOrganizationId(idAuth, accessAuth) {
@@ -181,7 +230,7 @@ function sanitizeBaseName(name) {
     .toLowerCase();
 }
 
-function buildOutputFileName(sourceName, email) {
+function buildSub2ApiOutputFileName(sourceName, email) {
   const sourceBase = typeof sourceName === "string" && sourceName.trim() !== ""
     ? sanitizeBaseName(sourceName.split("/").pop())
     : "";
@@ -194,11 +243,22 @@ function buildOutputFileName(sourceName, email) {
   return `${base}.sub2api.json`;
 }
 
+function buildCPAOutputFileName(accountName, email, providerType) {
+  const base = sanitizeBaseName(firstNonEmpty(email, accountName, providerType, "converted-account"));
+  const typeBase = sanitizeBaseName(providerType || "account");
+
+  if (!base || base === typeBase) {
+    return `${typeBase}.cpa.json`;
+  }
+
+  return `${base}.${typeBase}.cpa.json`;
+}
+
 function buildCommonExtra(record, email) {
   return stripUnavailable({
     email,
     email_key: toEmailKey(email),
-    last_refresh: normalizeTimestamp(record.last_refresh),
+    last_refresh: normalizeFlexibleTimestamp(record.last_refresh),
   });
 }
 
@@ -237,7 +297,7 @@ function parseOpenAIRecord(record, options) {
     idPayload.email,
   );
   const expiresAt = firstNonEmpty(
-    normalizeTimestamp(record.expired),
+    normalizeFlexibleTimestamp(record.expired),
     timestampFromUnixSeconds(accessPayload.exp),
   );
   const planType = firstNonEmpty(
@@ -286,7 +346,7 @@ function parseClaudeRecord(record) {
   }
 
   const email = firstNonEmpty(record.email);
-  const expiresAt = normalizeTimestamp(record.expired);
+  const expiresAt = normalizeFlexibleTimestamp(record.expired);
 
   return {
     providerLabel: "Claude",
@@ -312,7 +372,7 @@ function parseAntigravityRecord(record) {
   }
 
   const derivedExpiresAt = (() => {
-    const explicit = normalizeTimestamp(record.expired);
+    const explicit = normalizeFlexibleTimestamp(record.expired);
     if (explicit) {
       return explicit;
     }
@@ -360,9 +420,9 @@ function parseGeminiRecord(record) {
   }
 
   const expiresAt = firstNonEmpty(
-    normalizeTimestamp(rawToken.expiry),
-    normalizeTimestamp(rawToken.expires_at),
-    normalizeTimestamp(rawToken.expiration),
+    normalizeFlexibleTimestamp(rawToken.expiry),
+    normalizeFlexibleTimestamp(rawToken.expires_at),
+    normalizeFlexibleTimestamp(rawToken.expiration),
     timestampFromUnixSeconds(Number(rawToken.expires_in_abs)),
   );
   const projectId = firstNonEmpty(record.project_id);
@@ -391,6 +451,258 @@ function parseGeminiRecord(record) {
       checked: typeof record.checked === "boolean" ? record.checked : undefined,
     }),
   };
+}
+
+function normalizeSub2ApiPlatform(value) {
+  switch (String(value || "").trim().toLowerCase()) {
+    case "openai":
+    case "codex":
+      return "codex";
+    case "anthropic":
+    case "claude":
+      return "claude";
+    case "antigravity":
+      return "antigravity";
+    case "gemini":
+      return "gemini";
+    default:
+      return "";
+  }
+}
+
+function getSub2ApiCredentials(account) {
+  if (!isPlainObject(account.credentials)) {
+    throw new Error("缺少 account.credentials 对象");
+  }
+
+  return account.credentials;
+}
+
+function getSub2ApiExtra(account) {
+  return isPlainObject(account.extra) ? account.extra : {};
+}
+
+function buildSub2ApiEntryLabel(account, index) {
+  if (!isPlainObject(account)) {
+    return `accounts[${index}]`;
+  }
+
+  const credentials = isPlainObject(account.credentials) ? account.credentials : {};
+  const extra = getSub2ApiExtra(account);
+
+  return firstNonEmpty(
+    account.name,
+    extra.email,
+    credentials.email,
+    credentials.email_address,
+    `accounts[${index}]`,
+  );
+}
+
+function convertSub2ApiOpenAIAccount(account, options) {
+  const credentials = getSub2ApiCredentials(account);
+  const extra = getSub2ApiExtra(account);
+  const now = options.now instanceof Date ? options.now : new Date();
+  const accessToken = firstNonEmpty(credentials.access_token);
+  const refreshToken = firstNonEmpty(credentials.refresh_token);
+  const idToken = firstNonEmpty(credentials.id_token);
+
+  if (!accessToken) {
+    throw new Error("credentials.access_token 为空");
+  }
+
+  if (!refreshToken) {
+    throw new Error("credentials.refresh_token 为空，无法生成 Codex CPA 文件");
+  }
+
+  if (!idToken) {
+    throw new Error("credentials.id_token 为空，无法生成 Codex CPA 文件");
+  }
+
+  const accessPayload = parseJwtPayload(accessToken);
+  const expiresAt = firstNonEmpty(
+    normalizeFlexibleTimestamp(credentials.expires_at),
+    accessPayload ? timestampFromUnixSeconds(accessPayload.exp) : undefined,
+    timestampFromNowPlusSeconds(credentials.expires_in, now),
+  );
+  const email = firstNonEmpty(extra.email, credentials.email);
+  const planType = firstNonEmpty(credentials.plan_type);
+
+  return {
+    sourceType: "codex",
+    providerLabel: "Codex / OpenAI",
+    email,
+    planType,
+    expiresAt,
+    entryLabel: firstNonEmpty(account.name, email),
+    document: stripUnavailable({
+      type: "codex",
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      id_token: idToken,
+      account_id: firstNonEmpty(credentials.chatgpt_account_id),
+      email,
+      expired: expiresAt,
+      last_refresh: normalizeFlexibleTimestamp(extra.last_refresh),
+      plan_type: planType,
+    }),
+    outputFileName: buildCPAOutputFileName(account.name, email, "codex"),
+  };
+}
+
+function convertSub2ApiClaudeAccount(account, options) {
+  const credentials = getSub2ApiCredentials(account);
+  const extra = getSub2ApiExtra(account);
+  const now = options.now instanceof Date ? options.now : new Date();
+  const accessToken = firstNonEmpty(credentials.access_token);
+
+  if (!accessToken) {
+    throw new Error("credentials.access_token 为空");
+  }
+
+  const email = firstNonEmpty(extra.email, credentials.email_address);
+  const expiresAt = firstNonEmpty(
+    normalizeFlexibleTimestamp(credentials.expires_at),
+    timestampFromNowPlusSeconds(credentials.expires_in, now),
+  );
+
+  return {
+    sourceType: "claude",
+    providerLabel: "Claude",
+    email,
+    planType: undefined,
+    expiresAt,
+    entryLabel: firstNonEmpty(account.name, email),
+    document: stripUnavailable({
+      type: "claude",
+      access_token: accessToken,
+      email,
+      expired: expiresAt,
+      id_token: firstNonEmpty(credentials.id_token),
+      last_refresh: normalizeFlexibleTimestamp(extra.last_refresh),
+      refresh_token: firstNonEmpty(credentials.refresh_token),
+    }),
+    outputFileName: buildCPAOutputFileName(account.name, email, "claude"),
+  };
+}
+
+function convertSub2ApiAntigravityAccount(account, options) {
+  const credentials = getSub2ApiCredentials(account);
+  const extra = getSub2ApiExtra(account);
+  const now = options.now instanceof Date ? options.now : new Date();
+  const accessToken = firstNonEmpty(credentials.access_token);
+
+  if (!accessToken) {
+    throw new Error("credentials.access_token 为空");
+  }
+
+  const email = firstNonEmpty(extra.email, credentials.email);
+  const planType = firstNonEmpty(credentials.plan_type);
+  const expiresAt = firstNonEmpty(
+    normalizeFlexibleTimestamp(credentials.expires_at),
+    timestampFromNowPlusSeconds(credentials.expires_in, now),
+  );
+
+  return {
+    sourceType: "antigravity",
+    providerLabel: "Antigravity",
+    email,
+    planType,
+    expiresAt,
+    entryLabel: firstNonEmpty(account.name, email),
+    document: stripUnavailable({
+      type: "antigravity",
+      access_token: accessToken,
+      email,
+      expired: expiresAt,
+      expires_in: toFiniteNumber(credentials.expires_in),
+      last_refresh: normalizeFlexibleTimestamp(extra.last_refresh),
+      plan_type: planType,
+      project_id: firstNonEmpty(credentials.project_id),
+      refresh_token: firstNonEmpty(credentials.refresh_token),
+      token_type: firstNonEmpty(credentials.token_type),
+    }),
+    outputFileName: buildCPAOutputFileName(account.name, email, "antigravity"),
+  };
+}
+
+function convertSub2ApiGeminiAccount(account) {
+  const credentials = getSub2ApiCredentials(account);
+  const extra = getSub2ApiExtra(account);
+  const accessToken = firstNonEmpty(credentials.access_token);
+
+  if (!accessToken) {
+    throw new Error("credentials.access_token 为空");
+  }
+
+  const email = firstNonEmpty(extra.email);
+  const expiresAt = normalizeFlexibleTimestamp(credentials.expires_at);
+
+  return {
+    sourceType: "gemini",
+    providerLabel: "Gemini",
+    email,
+    planType: undefined,
+    expiresAt,
+    entryLabel: firstNonEmpty(account.name, email),
+    document: stripUnavailable({
+      type: "gemini",
+      checked: typeof extra.checked === "boolean" ? extra.checked : undefined,
+      auto: typeof extra.auto === "boolean" ? extra.auto : undefined,
+      email,
+      last_refresh: normalizeFlexibleTimestamp(extra.last_refresh),
+      project_id: firstNonEmpty(credentials.project_id),
+      token: {
+        access_token: accessToken,
+        expiry: expiresAt,
+        refresh_token: firstNonEmpty(credentials.refresh_token),
+        scope: firstNonEmpty(credentials.scope),
+        token_type: firstNonEmpty(credentials.token_type),
+      },
+    }),
+    outputFileName: buildCPAOutputFileName(account.name, email, "gemini"),
+  };
+}
+
+function convertSub2ApiAccount(account, options = {}) {
+  if (!isPlainObject(account)) {
+    throw new Error("account 不是对象");
+  }
+
+  const accountType = typeof account.type === "string" ? account.type.trim().toLowerCase() : "";
+  if (accountType && accountType !== "oauth") {
+    throw new Error(`暂不支持 type=${account.type} 的 sub2api 账号`);
+  }
+
+  const sourceType = normalizeSub2ApiPlatform(account.platform);
+  switch (sourceType) {
+    case "codex":
+      return convertSub2ApiOpenAIAccount(account, options);
+    case "claude":
+      return convertSub2ApiClaudeAccount(account, options);
+    case "antigravity":
+      return convertSub2ApiAntigravityAccount(account, options);
+    case "gemini":
+      return convertSub2ApiGeminiAccount(account, options);
+    default:
+      throw new Error(`暂不支持 platform=${account.platform} 的 sub2api 账号`);
+  }
+}
+
+function extractSub2ApiAccounts(document) {
+  if (Array.isArray(document)) {
+    return document;
+  }
+
+  if (isPlainObject(document) && Array.isArray(document.accounts)) {
+    return document.accounts;
+  }
+
+  if (isPlainObject(document) && typeof document.platform === "string" && isPlainObject(document.credentials)) {
+    return [document];
+  }
+
+  throw new Error("不是有效的 sub2api 配置，缺少 accounts 数组");
 }
 
 export function convertCPARecord(record, options = {}) {
@@ -449,10 +761,42 @@ export function convertCPARecord(record, options = {}) {
     email: parsed.email,
     planType: parsed.planType,
     expiresAt: parsed.expiresAt,
+    entryLabel: undefined,
     account,
     document,
-    outputFileName: buildOutputFileName(options.sourceName, parsed.email),
+    outputFileName: buildSub2ApiOutputFileName(options.sourceName, parsed.email),
   };
+}
+
+export function convertSub2ApiDocument(document, options = {}) {
+  const accounts = extractSub2ApiAccounts(document);
+
+  if (!accounts.length) {
+    throw new Error("sub2api 配置中的 accounts 为空");
+  }
+
+  const converted = [];
+  const skipped = [];
+
+  accounts.forEach((account, index) => {
+    const entryLabel = buildSub2ApiEntryLabel(account, index);
+
+    try {
+      converted.push({
+        sourceName: options.sourceName ?? "",
+        ...convertSub2ApiAccount(account, options),
+        entryLabel,
+      });
+    } catch (error) {
+      skipped.push({
+        sourceName: options.sourceName ?? "",
+        entryLabel,
+        reason: error instanceof Error ? error.message : "无法解析该账号",
+      });
+    }
+  });
+
+  return { converted, skipped };
 }
 
 export function buildMergedSub2ApiDocument(convertedRecords, options = {}) {
@@ -461,8 +805,12 @@ export function buildMergedSub2ApiDocument(convertedRecords, options = {}) {
   return {
     exported_at: normalizeTimestamp(now),
     proxies: [],
-    accounts: convertedRecords.map((item) => item.account),
+    accounts: convertedRecords.map((item) => item.account).filter(Boolean),
   };
+}
+
+export function buildMergedCPARecords(convertedRecords) {
+  return convertedRecords.map((item) => item.document).filter(Boolean);
 }
 
 export function formatMergedPreview(document, limit = 12000) {

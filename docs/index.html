@@ -6,33 +6,51 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0"
     />
-    <title>CPA to sub2api</title>
+    <title>CPA <> sub2api</title>
     <meta name="theme-color" content="#176d59" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" sizes="any" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="page-shell">
+    <div class="page-shell" id="page-shell">
       <header class="hero-grid">
         <section class="panel hero-card">
-          <p class="eyebrow">Browser-Only Workspace</p>
-          <h1>
+          <p class="eyebrow">Browser-Only Converter</p>
+          <h1 id="hero-title">
             <span class="hero-line">批量转换</span>
-            <span class="hero-line">CPA 认证文件，</span>
+            <span class="hero-line">CPA 到 sub2api</span>
             <span class="hero-line">不离开浏览器</span>
           </h1>
-          <p class="hero-copy">
+          <p class="hero-copy" id="hero-copy">
             将 CPA（CLIProxyApi）的认证 JSON 转成 sub2api 导入格式。
             当前支持 Codex、Claude、Antigravity、Gemini，
             整个过程只在当前浏览器本地完成，不发请求，不上传任何 token。
           </p>
-          <div class="hero-tags">
+          <div class="hero-tags" id="hero-tags">
+            <span>CPA 输入</span>
+            <span>sub2api 输出</span>
             <span>纯前端</span>
-            <span>本地解析</span>
-            <span>批量导出</span>
           </div>
-          <div class="support-strip" aria-label="支持来源">
-            <span class="support-label">支持来源</span>
+          <div class="mode-switch" role="tablist" aria-label="转换方向">
+            <button
+              class="mode-option is-active"
+              type="button"
+              data-mode-switch="cpaToSub2Api"
+              aria-selected="true"
+            >
+              CPA → sub2api
+            </button>
+            <button
+              class="mode-option"
+              type="button"
+              data-mode-switch="sub2apiToCpa"
+              aria-selected="false"
+            >
+              sub2api → CPA
+            </button>
+          </div>
+          <div class="support-strip" aria-label="支持平台">
+            <span class="support-label">支持平台</span>
             <span class="support-item">Codex</span>
             <span class="support-item">Claude</span>
             <span class="support-item">Antigravity</span>
@@ -45,26 +63,26 @@
             <div class="import-copy-block">
               <div class="section-head import-head">
                 <div>
-                  <h2>导入文件</h2>
-                  <p>支持多文件拖拽，也支持目录导入。</p>
+                  <h2 id="import-title">导入 CPA 文件</h2>
+                  <p id="import-subtitle">支持多文件拖拽，也支持目录导入。</p>
                 </div>
               </div>
 
-              <div class="source-list" aria-label="可导入类型">
+              <div class="source-list" id="source-list" aria-label="可导入类型">
                 <span class="source-pill">`type: codex`</span>
                 <span class="source-pill">`type: claude`</span>
                 <span class="source-pill">`type: antigravity`</span>
                 <span class="source-pill">`type: gemini`</span>
               </div>
 
-              <p class="import-copy">
+              <p class="import-copy" id="import-copy">
                 文件只在当前浏览器本地解析，不上传，不请求接口。
               </p>
             </div>
 
             <div class="dropzone" id="dropzone" tabindex="0" role="button">
-              <p class="dropzone-title">拖拽 `*.json` 到这里</p>
-              <p class="dropzone-copy">
+              <p class="dropzone-title" id="dropzone-title">拖拽 CPA `*.json` 到这里</p>
+              <p class="dropzone-copy" id="dropzone-copy">
                 页面不会上传任何认证数据，所有内容都只在当前浏览器中解析。
               </p>
               <div class="dropzone-actions">
@@ -86,12 +104,12 @@
           </section>
           <section class="panel stat-card">
             <div class="stat-value" id="stat-skipped">0</div>
-            <div class="stat-label">跳过文件</div>
+            <div class="stat-label">跳过项</div>
           </section>
           <section class="panel stat-card provider-card">
             <div class="stat-value" id="stat-type">4种</div>
-            <div class="stat-label">支持来源</div>
-            <div class="provider-grid" aria-label="支持来源图标">
+            <div class="stat-label">支持平台</div>
+            <div class="provider-grid" aria-label="支持平台图标">
               <div class="provider-entry">
                 <img src="./assets/providers/codex.svg" alt="Codex 图标" class="provider-icon" />
                 <span>Codex</span>
@@ -125,10 +143,10 @@
                 清空
               </button>
               <button class="button button-secondary" id="download-individual" type="button" disabled>
-                导出单文件
+                导出 sub2api 单文件
               </button>
               <button class="button button-primary" id="download-merged" type="button" disabled>
-                下载合并 JSON
+                下载合并 sub2api JSON
               </button>
             </div>
           </div>
@@ -136,7 +154,7 @@
           <div class="results-grid">
             <section class="result-panel">
               <div class="result-panel-head">
-                <h3>有效文件</h3>
+                <h3>可导出结果</h3>
                 <span id="converted-hint">等待导入</span>
               </div>
               <div class="table-wrap">
@@ -151,7 +169,7 @@
                   <thead>
                     <tr>
                       <th>文件</th>
-                      <th>来源</th>
+                      <th>平台</th>
                       <th>邮箱</th>
                       <th>过期时间</th>
                       <th>导出</th>

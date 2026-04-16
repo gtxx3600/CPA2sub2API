@@ -50,6 +50,8 @@ body::before {
   width: min(1460px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 18px 0 22px;
+  transform-origin: center center;
+  will-change: transform, opacity;
 }
 
 .hero-grid,
@@ -145,6 +147,42 @@ body::before {
   background: rgba(255, 255, 255, 0.4);
   color: #245f52;
   font-size: 0.84rem;
+}
+
+.mode-switch {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 27, 23, 0.08);
+  background: rgba(255, 255, 255, 0.44);
+  backdrop-filter: blur(10px);
+}
+
+.mode-option {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 16px;
+  font: inherit;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.mode-option:hover {
+  transform: translateY(-1px);
+}
+
+.mode-option.is-active {
+  color: #f8f7f4;
+  background: var(--accent);
+  box-shadow: 0 12px 24px rgba(23, 109, 89, 0.18);
 }
 
 .support-strip,
@@ -526,6 +564,11 @@ td code {
   color: var(--muted);
 }
 
+.file-entry {
+  font-size: 0.78rem;
+  color: #245f52;
+}
+
 .source-meta {
   justify-items: start;
 }
@@ -609,6 +652,43 @@ td code {
   margin-top: 4px;
 }
 
+.page-shell.is-flip-out,
+.page-shell.is-flip-in {
+  pointer-events: none;
+}
+
+.page-shell.is-flip-out {
+  animation: pageFlipOut 240ms cubic-bezier(0.55, 0.08, 0.62, 0.92) forwards;
+}
+
+.page-shell.is-flip-in {
+  animation: pageFlipIn 280ms cubic-bezier(0.18, 0.82, 0.3, 1) forwards;
+}
+
+@keyframes pageFlipOut {
+  from {
+    transform: perspective(2400px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+
+  to {
+    transform: perspective(2400px) rotateY(88deg) scale(0.985);
+    opacity: 0.2;
+  }
+}
+
+@keyframes pageFlipIn {
+  from {
+    transform: perspective(2400px) rotateY(-88deg) scale(0.985);
+    opacity: 0.2;
+  }
+
+  to {
+    transform: perspective(2400px) rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
 @media (max-width: 1280px) {
   .hero-grid {
     grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.92fr);
@@ -686,6 +766,15 @@ td code {
     font-size: 2.2rem;
   }
 
+  .mode-switch {
+    width: 100%;
+  }
+
+  .mode-option {
+    flex: 1 1 0;
+    text-align: center;
+  }
+
   .results-actions,
   .dropzone-actions {
     width: 100%;
@@ -699,5 +788,19 @@ td code {
 
   table {
     min-width: 560px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-shell,
+  .dropzone,
+  .button,
+  .mode-option {
+    transition: none;
+  }
+
+  .page-shell.is-flip-out,
+  .page-shell.is-flip-in {
+    animation: none;
   }
 }
