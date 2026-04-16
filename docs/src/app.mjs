@@ -150,8 +150,34 @@ function createDownload(text, fileName) {
   downloadBlob(new Blob([text], { type: "application/json;charset=utf-8" }), fileName);
 }
 
-async function saveIndividualFiles(records) {
+function buildRecordsZip(records) {
+  return buildZipArchive(
+    records.map((item) => ({
+      fileName: item.outputFileName,
+      text: JSON.stringify(item.document, null, 2),
+    })),
+  );
+}
+
+function getIndividualDownloadLabel(mode, count) {
+  if (mode === "cpaToSub2Api" && count > 3) {
+    return "导出 sub2api ZIP 包";
+  }
+
+  if (mode === "sub2apiToCpa") {
+    return "导出 CPA 单文件";
+  }
+
+  return "导出 sub2api 单文件";
+}
+
+async function saveIndividualFiles(records, mode = state.mode) {
   if (!records.length) {
+    return;
+  }
+
+  if (mode === "cpaToSub2Api" && records.length > 3) {
+    downloadBlob(buildRecordsZip(records), buildTargetFileName("sub2api", "zip"));
     return;
   }
 
@@ -337,6 +363,7 @@ function renderState() {
   elements.summaryText.textContent = buildSummary(pageState, config);
   elements.downloadMerged.disabled = pageState.converted.length === 0;
   elements.downloadIndividual.disabled = pageState.converted.length === 0;
+  elements.downloadIndividual.textContent = getIndividualDownloadLabel(state.mode, pageState.converted.length);
   renderConvertedTable(pageState, config);
   renderSkippedList(pageState);
 }
@@ -367,7 +394,6 @@ function renderMode() {
   elements.importCopy.textContent = config.importCopy;
   elements.dropzoneTitle.textContent = config.dropzoneTitle;
   elements.dropzoneCopy.textContent = config.dropzoneCopy;
-  elements.downloadIndividual.textContent = config.individualLabel;
   elements.downloadMerged.textContent = config.mergedLabel;
 
   elements.modeButtons.forEach((button) => {
@@ -558,7 +584,7 @@ function bindEvents() {
     void downloadMergedDocument();
   });
   elements.downloadIndividual.addEventListener("click", () => {
-    void saveIndividualFiles(getPageState().converted);
+    void saveIndividualFiles(getPageState().converted, state.mode);
   });
   elements.convertedBody.addEventListener("click", (event) => {
     const button = event.target.closest("[data-download-index]");
