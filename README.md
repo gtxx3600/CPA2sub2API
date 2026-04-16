@@ -1,4 +1,4 @@
-# CPA <> sub2api
+# CPA <==> sub2api
 
 纯前端网页工具，用来在 CPA（CLIProxyApi）认证文件和 sub2api 配置之间做双向转换。
 
@@ -9,7 +9,8 @@
 
 ## 界面预览
 
-![CPA to sub2api 界面预览](./screenshot.png)
+![CPA to sub2api 界面预览](./cpa2sub2api.png)
+![sub2api to CPA 界面预览](./sub2api2cpa.png)
 
 ## 在线使用
 
